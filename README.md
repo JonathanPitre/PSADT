@@ -13,6 +13,8 @@ In order for the [PowerShell App Deployment Toolkit](https://github.com/PSAppDep
 # Example 3 Uninstall MSI:
 # Remove-MSIApplications -Name "appName" -Parameters "/QB"
 
+#Requires -Version 5.1
+
 # Custom package providers list
 $PackageProviders = @("Nuget")
 
@@ -34,7 +36,7 @@ Else {
 
     # Install custom package providers list
     Foreach ($PackageProvider in $PackageProviders) {
-        If (-not(Get-PackageProvider -ListAvailable -Name $PackageProvider -ErrorAction SilentlyContinue)) {Install-PackageProvider -Name $PackageProvider -Force}
+        If (-not(Get-PackageProvider -ListAvailable -Name $PackageProvider -ErrorAction SilentlyContinue)) { Install-PackageProvider -Name $PackageProvider -Force }
     }
 
     # Add the Powershell Gallery as trusted repository
@@ -43,11 +45,11 @@ Else {
     # Update PowerShellGet
     $InstalledPSGetVersion = (Get-PackageProvider -Name PowerShellGet).Version
     $PSGetVersion = [version](Find-PackageProvider -Name PowerShellGet).Version
-    If ($PSGetVersion -gt $InstalledPSGetVersion) {Install-PackageProvider -Name PowerShellGet -Force}
+    If ($PSGetVersion -gt $InstalledPSGetVersion) { Install-PackageProvider -Name PowerShellGet -Force }
 
     # Install and import custom modules list
     Foreach ($Module in $Modules) {
-        If (-not(Get-Module -ListAvailable -Name $Module)) {Install-Module -Name $Module -AllowClobber -Force | Import-Module -Name $Module -Force}
+        If (-not(Get-Module -ListAvailable -Name $Module)) { Install-Module -Name $Module -AllowClobber -Force | Import-Module -Name $Module -Force }
         Else {
             $InstalledModuleVersion = (Get-InstalledModule -Name $Module).Version
             $ModuleVersion = (Find-Module -Name $Module).Version
@@ -62,6 +64,31 @@ Else {
 
     Write-Verbose -Message "Custom modules were successfully imported!" -Verbose
 }
+
+# Get the current script directory
+Function Get-ScriptDirectory {
+    Remove-Variable appScriptDirectory
+    Try {
+        If ($psEditor) { Split-Path $psEditor.GetEditorContext().CurrentFile.Path } # Visual Studio Code Host
+        ElseIf ($psISE) { Split-Path $psISE.CurrentFile.FullPath } # Windows PowerShell ISE Host
+        ElseIf ($PSScriptRoot) { $PSScriptRoot } # Windows PowerShell 3.0-5.1
+        Else {
+            Write-Host -ForegroundColor Red "Cannot resolve script file's path"
+            Exit 1
+        }
+    }
+    Catch {
+        Write-Host -ForegroundColor Red "Caught Exception: $($Error[0].Exception.Message)"
+        Exit 2
+    }
+}
+
+# Variables Declaration
+# Generic
+$ProgressPreference = "SilentlyContinue"
+$ErrorActionPreference = "SilentlyContinue"
+$env:SEE_MASK_NOZONECHECKS = 1
+$appScriptDirectory = Get-ScriptDirectory
 ````
 
 ### Tips and Tricks
