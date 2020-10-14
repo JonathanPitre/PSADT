@@ -70,9 +70,9 @@ Param (
 [string]$appDeployMainScriptFriendlyName = 'App Deploy Toolkit Main'
 
 ## Variables: Script Info
-[version]$appDeployMainScriptVersion = [version]'3.8.2'
-[version]$appDeployMainScriptMinimumConfigVersion = [version]'3.8.2'
-[string]$appDeployMainScriptDate = '08/05/2020'
+[version]$appDeployMainScriptVersion = [version]'3.8.3'
+[version]$appDeployMainScriptMinimumConfigVersion = [version]'3.8.3'
+[string]$appDeployMainScriptDate = '30/09/2020'
 [hashtable]$appDeployMainScriptParameters = $PSBoundParameters
 
 ## Variables: Datetime and Culture
@@ -87,7 +87,7 @@ Param (
 
 ## Variables: Environment Variables
 [psobject]$envHost = $Host
-[psobject]$envShellFolders = Get-ItemProperty -Path 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction 'SilentlyContinue'
+[psobject]$envShellFolders = Get-ItemProperty -Path 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction 'SilentlyContinue'
 [string]$envAllUsersProfile = $env:ALLUSERSPROFILE
 [string]$envAppData = [Environment]::GetFolderPath('ApplicationData')
 [string]$envArchitecture = $env:PROCESSOR_ARCHITECTURE
@@ -98,7 +98,6 @@ Param (
 [string]$envCommonStartUp   = $envShellFolders | Select-Object -ExpandProperty 'Common Startup' -ErrorAction 'SilentlyContinue'
 [string]$envCommonTemplates = $envShellFolders | Select-Object -ExpandProperty 'Common Templates' -ErrorAction 'SilentlyContinue'
 [string]$envComputerName = [Environment]::MachineName.ToUpper()
-[string]$envComputerNameFQDN = ([Net.Dns]::GetHostEntry('localhost')).HostName
 [string]$envHomeDrive = $env:HOMEDRIVE
 [string]$envHomePath = $env:HOMEPATH
 [string]$envHomeShare = $env:HOMESHARE
@@ -132,15 +131,31 @@ Param (
 [string]$envMachineADDomain = ''
 [string]$envLogonServer = ''
 [string]$MachineDomainController = ''
+[string]$envComputerNameFQDN = $envComputerName
 If ($IsMachinePartOfDomain) {
 	[string]$envMachineADDomain = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').Domain | Where-Object { $_ } | ForEach-Object { $_.ToLower() }
+	try {
+		$envComputerNameFQDN = ([Net.Dns]::GetHostEntry('localhost')).HostName
+	}
+	catch {
+		# Function GetHostEntry failed, but we can construct the FQDN in another way
+		$envComputerNameFQDN = $envComputerNameFQDN + "." + $envMachineADDomain
+	}
+
 	Try {
 		[string]$envLogonServer = $env:LOGONSERVER | Where-Object { (($_) -and (-not $_.Contains('\\MicrosoftAccount'))) } | ForEach-Object { $_.TrimStart('\') } | ForEach-Object { ([Net.Dns]::GetHostEntry($_)).HostName }
 		# If running in system context, fall back on the logonserver value stored in the registry
-		If (-not $envLogonServer) { [string]$envLogonServer = Get-ItemProperty -LiteralPath 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\History' -ErrorAction 'SilentlyContinue' | Select-Object -ExpandProperty 'DCName' -ErrorAction 'SilentlyContinue' }
-		[string]$MachineDomainController = [DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().FindDomainController().Name
+		If (-not $envLogonServer) { [string]$envLogonServer = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\History' -ErrorAction 'SilentlyContinue' | Select-Object -ExpandProperty 'DCName' -ErrorAction 'SilentlyContinue' }
 	}
-	Catch { }
+	Catch { 
+		# If GetHostEntry fails, just use the registry value
+		[string]$envLogonServer = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\History' -ErrorAction 'SilentlyContinue' | Select-Object -ExpandProperty 'DCName' -ErrorAction 'SilentlyContinue'
+	}
+
+	try {
+		[string]$MachineDomainController = [DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().FindDomainController().Name
+	} 
+	catch {	}
 }
 Else {
 	[string]$envMachineWorkgroup = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').Domain | Where-Object { $_ } | ForEach-Object { $_.ToUpper() }
@@ -160,11 +175,11 @@ Catch { }
 [string]$envOSVersionMajor = $envOSVersion.Major
 [string]$envOSVersionMinor = $envOSVersion.Minor
 [string]$envOSVersionBuild = $envOSVersion.Build
-If ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction 'SilentlyContinue').PSObject.Properties.Name -contains 'UBR') {
-	[string]$envOSVersionRevision = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'UBR' -ErrorAction 'SilentlyContinue').UBR
+If ((Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction 'SilentlyContinue').PSObject.Properties.Name -contains 'UBR') {
+	[string]$envOSVersionRevision = (Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'UBR' -ErrorAction 'SilentlyContinue').UBR
 }
-ElseIf ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction 'SilentlyContinue').PSObject.Properties.Name -contains 'BuildLabEx') {
-	[string]$envOSVersionRevision = ,((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'BuildLabEx' -ErrorAction 'SilentlyContinue').BuildLabEx -split '\.') | ForEach-Object { $_[1] }
+ElseIf ((Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction 'SilentlyContinue').PSObject.Properties.Name -contains 'BuildLabEx') {
+	[string]$envOSVersionRevision = ,((Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'BuildLabEx' -ErrorAction 'SilentlyContinue').BuildLabEx -split '\.') | ForEach-Object { $_[1] }
 }
 If ($envOSVersionRevision -notmatch '^[\d\.]+$') { $envOSVersionRevision = '' }
 If ($envOSVersionRevision) { [string]$envOSVersion = "$($envOSVersion.ToString()).$envOSVersionRevision" } Else { [string]$envOSVersion = "$($envOSVersion.ToString())" }
@@ -201,9 +216,15 @@ If ($Is64Bit) {
 		[string]$envProgramFiles = [Environment]::GetEnvironmentVariable('ProgramW6432')
 		[string]$envCommonProgramFiles = [Environment]::GetEnvironmentVariable('CommonProgramW6432')
 	}
-	
-	[string]$envProgramFilesX86 = [Environment]::GetFolderPath('ProgramFilesX86')
-	[string]$envCommonProgramFilesX86 = [Environment]::GetFolderPath('CommonProgramFilesX86')
+	## Powershell 2 doesn't support X86 folders so need to use variables instead
+	try {
+		[string]$envProgramFilesX86 = [Environment]::GetFolderPath('ProgramFilesX86')
+		[string]$envCommonProgramFilesX86 = [Environment]::GetFolderPath('CommonProgramFilesX86')
+	}
+	catch {
+		[string]$envProgramFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+		[string]$envCommonProgramFilesX86 = [Environment]::GetEnvironmentVariable('CommonProgramFiles(x86)')
+	}
 }
 Else {
 	[string]$envProgramFiles = [Environment]::GetFolderPath('ProgramFiles')
@@ -354,24 +375,24 @@ If ($configToolkitRequireAdmin -eq $false){
 	If ($RunAsActiveUser) {
 		#  Read language defined by Group Policy
 		If (-not $HKULanguages) {
-			[string[]]$HKULanguages = Get-RegistryKey -Key 'HKLM:SOFTWARE\Policies\Microsoft\MUI\Settings' -Value 'PreferredUILanguages'
+			[string[]]$HKULanguages = Get-RegistryKey -Key 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\MUI\Settings' -Value 'PreferredUILanguages'
 		}
 		If (-not $HKULanguages) {
-			[string[]]$HKULanguages = Get-RegistryKey -Key 'HKCU\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Value 'PreferredUILanguages' -SID $RunAsActiveUser.SID
+			[string[]]$HKULanguages = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Software\Policies\Microsoft\Windows\Control Panel\Desktop' -Value 'PreferredUILanguages' -SID $RunAsActiveUser.SID
 		}
 		#  Read language for Win Vista & higher machines
 		If (-not $HKULanguages) {
-			[string[]]$HKULanguages = Get-RegistryKey -Key 'HKCU\Control Panel\Desktop' -Value 'PreferredUILanguages' -SID $RunAsActiveUser.SID
+			[string[]]$HKULanguages = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\Desktop' -Value 'PreferredUILanguages' -SID $RunAsActiveUser.SID
 		}
 		If (-not $HKULanguages) {
-			[string[]]$HKULanguages = Get-RegistryKey -Key 'HKCU\Control Panel\Desktop\MuiCached' -Value 'MachinePreferredUILanguages' -SID $RunAsActiveUser.SID
+			[string[]]$HKULanguages = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\Desktop\MuiCached' -Value 'MachinePreferredUILanguages' -SID $RunAsActiveUser.SID
 		}
 		If (-not $HKULanguages) {
-			[string[]]$HKULanguages = Get-RegistryKey -Key 'HKCU\Control Panel\International' -Value 'LocaleName' -SID $RunAsActiveUser.SID
+			[string[]]$HKULanguages = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\International' -Value 'LocaleName' -SID $RunAsActiveUser.SID
 		}
 		#  Read language for Win XP machines
 		If (-not $HKULanguages) {
-			[string]$HKULocale = Get-RegistryKey -Key 'HKCU\Control Panel\International' -Value 'Locale' -SID $RunAsActiveUser.SID
+			[string]$HKULocale = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\International' -Value 'Locale' -SID $RunAsActiveUser.SID
 			If ($HKULocale) {
 				[int32]$HKULocale = [Convert]::ToInt32('0x' + $HKULocale, 16)
 				[string[]]$HKULanguages = ([Globalization.CultureInfo]($HKULocale)).Name
@@ -458,8 +479,8 @@ If ($configToolkitRequireAdmin -eq $false){
 If (-not $deploymentType) { [string]$deploymentType = 'Install' }
 
 ## Variables: Executables
-[string]$exeWusa = 'wusa.exe' # Installs Standalone Windows Updates
-[string]$exeMsiexec = 'msiexec.exe' # Installs MSI Installers
+[string]$exeWusa = "$envWinDir\System32\wusa.exe" # Installs Standalone Windows Updates
+[string]$exeMsiexec = "$envWinDir\System32\msiexec.exe" # Installs MSI Installers
 [string]$exeSchTasks = "$envWinDir\System32\schtasks.exe" # Manages Scheduled Tasks
 
 ## Variables: RegEx Patterns
@@ -470,14 +491,14 @@ If (-not $deploymentType) { [string]$deploymentType = 'Install' }
 
 ## Variables: Registry Keys
 #  Registry keys for native and WOW64 applications
-[string[]]$regKeyApplications = 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+[string[]]$regKeyApplications = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall','Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
 If ($is64Bit) {
-	[string]$regKeyLotusNotes = 'HKLM:SOFTWARE\Wow6432Node\Lotus\Notes'
+	[string]$regKeyLotusNotes = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Lotus\Notes'
 }
 Else {
-	[string]$regKeyLotusNotes = 'HKLM:SOFTWARE\Lotus\Notes'
+	[string]$regKeyLotusNotes = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Lotus\Notes'
 }
-[string]$regKeyAppExecution = 'HKLM:SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
+[string]$regKeyAppExecution = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options'
 
 ## COM Objects: Initialize
 [__comobject]$Shell = New-Object -ComObject 'WScript.Shell' -ErrorAction 'SilentlyContinue'
@@ -499,15 +520,15 @@ If (Test-Path -LiteralPath 'variable:deferDays') { Remove-Variable -Name 'deferD
 	#  If a user is logged on, then get display scale factor for logged on user (even if running in session 0)
 	[boolean]$UserDisplayScaleFactor = $false
 	If ($RunAsActiveUser) {
-		[int32]$dpiPixels = Get-RegistryKey -Key 'HKCU\Control Panel\Desktop\WindowMetrics' -Value 'AppliedDPI' -SID $RunAsActiveUser.SID
+		[int32]$dpiPixels = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\Desktop\WindowMetrics' -Value 'AppliedDPI' -SID $RunAsActiveUser.SID
 		If (-not ([string]$dpiPixels)) {
-			[int32]$dpiPixels = Get-RegistryKey -Key 'HKCU\Control Panel\Desktop' -Value 'LogPixels' -SID $RunAsActiveUser.SID
+			[int32]$dpiPixels = Get-RegistryKey -Key 'Registry::HKEY_CURRENT_USER\Control Panel\Desktop' -Value 'LogPixels' -SID $RunAsActiveUser.SID
 		}
 		[boolean]$UserDisplayScaleFactor = $true
 	}
 	If (-not ([string]$dpiPixels)) {
 		#  This registry setting only exists if system scale factor has been changed at least once
-		[int32]$dpiPixels = Get-RegistryKey -Key 'HKLM:SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI' -Value 'LogPixels'
+		[int32]$dpiPixels = Get-RegistryKey -Key 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontDPI' -Value 'LogPixels'
 		[boolean]$UserDisplayScaleFactor = $false
 	}
 	Switch ($dpiPixels) {
@@ -589,8 +610,11 @@ Function Execute-MSP {
 <#
 .SYNOPSIS
 	Reads SummaryInfo targeted product codes in MSP file and determines if the MSP file applies to any installed products
-	If a valid installed product is found, triggers the Execute-MSI function to patch the installation.
+	If a valid installed product is found, triggers the Execute-MSI function to patch the installation. Uses default config MSI parameters.
 .PARAMETER Path
+	Path to the msp file
+.PARAMETER AddParameters
+	Additional parameters
 .EXAMPLE
 	Execute-MSP -Path 'Adobe_Reader_11.0.3_EN.msp'
 .NOTES
@@ -602,7 +626,10 @@ Function Execute-MSP {
 		[Parameter(Mandatory=$true,HelpMessage='Please enter the path to the MSP file')]
 		[ValidateScript({('.msp' -contains [IO.Path]::GetExtension($_))})]
 		[Alias('FilePath')]
-		[string]$Path
+		[string]$Path,
+		[Parameter(Mandatory=$false)]
+		[ValidateNotNullorEmpty()]
+		[string]$AddParameters
 	)
 
 	Begin {
@@ -641,7 +668,14 @@ Function Execute-MSP {
 		Try { $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($SummaryInformation) } Catch { }
 		Try { $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($DataBase) } Catch { }
 		Try { $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($Installer) } Catch { }
-		If ($IsMSPNeeded) { Execute-MSI -Action Patch -Path $Path }
+		If ($IsMSPNeeded) { 
+			If ($AddParameters) {
+				Execute-MSI -Action Patch -Path $Path -AddParameters $AddParameters
+			}
+			Else {
+				Execute-MSI -Action Patch -Path $Path
+			}
+		}
 	}
 }
 #endregion
@@ -1224,7 +1258,7 @@ Function Exit-Script {
 		## Disable logging to file so that we can archive the log files
 		. $DisableScriptLogging
 
-		[string]$DestinationArchiveFileName = $installName + '_' + $deploymentType + '_' + ((Get-Date -Format 'yyyy-MM-dd-hh-mm-ss').ToString()) + '.zip'
+		[string]$DestinationArchiveFileName = $installName + '_' + $deploymentType + '_' + ((Get-Date -Format 'yyyy-MM-dd-HH-mm-ss').ToString()) + '.zip'
 		New-ZipFile -DestinationArchiveDirectoryPath $configToolkitLogDir -DestinationArchiveFileName $DestinationArchiveFileName -SourceDirectory $logTempFolder -RemoveSourceAfterArchiving
 	}
 
@@ -2558,6 +2592,8 @@ Function Execute-MSI {
 		If ($patch) { $argsMSI = "$argsMSI PATCH=$mspFile" }
 		#  Replace default parameters if specified.
 		If ($Parameters) { $argsMSI = "$argsMSI $Parameters" } Else { $argsMSI = "$argsMSI $msiDefaultParams" }
+		#  Add reinstallmode and reinstall variable for Patch
+		If ($action -eq 'Patch') {$argsMSI += " REINSTALLMODE=ecmus REINSTALL=ALL"}
 		#  Append parameters to default parameters if specified.
 		If ($AddParameters) { $argsMSI = "$argsMSI $AddParameters" }
 		#  Add custom Logging Options if specified, otherwise, add default Logging Options from Config file
@@ -3580,7 +3616,7 @@ Function Copy-File {
 .PARAMETER ContinueFileCopyOnError
 	Continue copying files if an error is encountered. This will continue the deployment script and will warn about files that failed to be copied. Default is: $false.
 .EXAMPLE
-	Copy-File -Path "$dirSupportFiles\MyApp.ini" -Destination "$envWindir\MyApp.ini"
+	Copy-File -Path "$dirSupportFiles\MyApp.ini" -Destination "$envWinDir\MyApp.ini"
 .EXAMPLE
 	Copy-File -Path "$dirSupportFiles\*.*" -Destination "$envTemp\tempfiles"
 	Copy all of the files in a folder to a destination folder.
@@ -3773,7 +3809,7 @@ Function Remove-File {
 						Write-Log -Message "Delete file(s) recursively in path [$Item]..." -Source ${CmdletName}
 					}
 					ElseIf ((-not $Recurse) -and (Test-Path -LiteralPath $Item -PathType 'Container')) {
-						Write-Log -Message "Skipping folder [$Item] because the Recurse switch was not specified"
+						Write-Log -Message "Skipping folder [$Item] because the Recurse switch was not specified" -Source ${CmdletName}
 					Continue
 					}
 					Else {
@@ -3814,6 +3850,8 @@ Function Convert-RegistryPath {
 .PARAMETER SID
 	The security identifier (SID) for a user. Specifying this parameter will convert a HKEY_CURRENT_USER registry key to the HKEY_USERS\$SID format.
 	Specify this parameter from the Invoke-HKCURegistrySettingsForAllUsers function to read/edit HKCU registry settings for all users on the system.
+.PARAMETER DisableFunctionLogging
+	Disables logging of this function. Default: $true
 .EXAMPLE
 	Convert-RegistryPath -Key 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1AD147D0-BE0E-3D6C-AC11-64F6DC4163F1}'
 .EXAMPLE
@@ -3829,7 +3867,10 @@ Function Convert-RegistryPath {
 		[string]$Key,
 		[Parameter(Mandatory=$false)]
 		[ValidateNotNullorEmpty()]
-		[string]$SID
+		[string]$SID,
+		[Parameter(Mandatory=$false)]
+		[ValidateNotNullorEmpty()]
+		[bool]$DisableFunctionLogging = $true
 	)
 
 	Begin {
@@ -3839,45 +3880,41 @@ Function Convert-RegistryPath {
 	}
 	Process {
 		## Convert the registry key hive to the full path, only match if at the beginning of the line
-		If ($Key -match '^HKLM:\\|^HKCU:\\|^HKCR:\\|^HKU:\\|^HKCC:\\|^HKPD:\\') {
-			#  Converts registry paths that start with, e.g.: HKLM:\
-			$key = $key -replace '^HKLM:\\', 'HKEY_LOCAL_MACHINE\'
-			$key = $key -replace '^HKCR:\\', 'HKEY_CLASSES_ROOT\'
-			$key = $key -replace '^HKCU:\\', 'HKEY_CURRENT_USER\'
-			$key = $key -replace '^HKU:\\', 'HKEY_USERS\'
-			$key = $key -replace '^HKCC:\\', 'HKEY_CURRENT_CONFIG\'
-			$key = $key -replace '^HKPD:\\', 'HKEY_PERFORMANCE_DATA\'
+		If ($Key -match '^HKLM') {
+			$Key = $Key -replace '^HKLM:\\', 'HKEY_LOCAL_MACHINE\' -replace '^HKLM:', 'HKEY_LOCAL_MACHINE\' -replace '^HKLM\\', 'HKEY_LOCAL_MACHINE\'
 		}
-		ElseIf ($Key -match '^HKLM:|^HKCU:|^HKCR:|^HKU:|^HKCC:|^HKPD:') {
-			#  Converts registry paths that start with, e.g.: HKLM:
-			$key = $key -replace '^HKLM:', 'HKEY_LOCAL_MACHINE\'
-			$key = $key -replace '^HKCR:', 'HKEY_CLASSES_ROOT\'
-			$key = $key -replace '^HKCU:', 'HKEY_CURRENT_USER\'
-			$key = $key -replace '^HKU:', 'HKEY_USERS\'
-			$key = $key -replace '^HKCC:', 'HKEY_CURRENT_CONFIG\'
-			$key = $key -replace '^HKPD:', 'HKEY_PERFORMANCE_DATA\'
+		elseif ($Key -match '^HKCR') {
+			$Key = $Key -replace '^HKCR:\\', 'HKEY_CLASSES_ROOT\' -replace '^HKCR:', 'HKEY_CLASSES_ROOT\' -replace '^HKCR\\', 'HKEY_CLASSES_ROOT\'
 		}
-		ElseIf ($Key -match '^HKLM\\|^HKCU\\|^HKCR\\|^HKU\\|^HKCC\\|^HKPD\\') {
-			#  Converts registry paths that start with, e.g.: HKLM\
-			$key = $key -replace '^HKLM\\', 'HKEY_LOCAL_MACHINE\'
-			$key = $key -replace '^HKCR\\', 'HKEY_CLASSES_ROOT\'
-			$key = $key -replace '^HKCU\\', 'HKEY_CURRENT_USER\'
-			$key = $key -replace '^HKU\\', 'HKEY_USERS\'
-			$key = $key -replace '^HKCC\\', 'HKEY_CURRENT_CONFIG\'
-			$key = $key -replace '^HKPD\\', 'HKEY_PERFORMANCE_DATA\'
+		elseif ($Key -match '^HKCU') {
+			$Key = $Key -replace '^HKCU:\\', 'HKEY_CURRENT_USER\' -replace '^HKCU:', 'HKEY_CURRENT_USER\' -replace '^HKCU\\', 'HKEY_CURRENT_USER\'
 		}
+		elseif ($Key -match '^HKU') {
+			$Key = $Key -replace '^HKU:\\', 'HKEY_USERS\' -replace '^HKU:', 'HKEY_USERS\' -replace '^HKU\\', 'HKEY_USERS\'
+		}
+		elseif ($Key -match '^HKCC') {
+			$Key = $Key -replace '^HKCC:\\', 'HKEY_CURRENT_CONFIG\' -replace '^HKCC:', 'HKEY_CURRENT_CONFIG\' -replace '^HKCC\\', 'HKEY_CURRENT_CONFIG\'
+		}
+		elseif ($Key -match '^HKPD') {
+			$Key = $Key -replace '^HKPD:\\', 'HKEY_PERFORMANCE_DATA\' -replace '^HKPD:', 'HKEY_PERFORMANCE_DATA\' -replace '^HKPD\\', 'HKEY_PERFORMANCE_DATA\'
+		}
+
+		## Append the PowerShell provider to the registry key path
+		If ($key -notmatch '^Registry::') {[string]$key = "Registry::$key" }
 
 		If ($PSBoundParameters.ContainsKey('SID')) {
 			## If the SID variable is specified, then convert all HKEY_CURRENT_USER key's to HKEY_USERS\$SID
-			If ($key -match '^HKEY_CURRENT_USER\\') { $key = $key -replace '^HKEY_CURRENT_USER\\', "HKEY_USERS\$SID\" }
+			If ($key -match '^Registry::HKEY_CURRENT_USER\\') { $key = $key -replace '^Registry::HKEY_CURRENT_USER\\', "Registry::HKEY_USERS\$SID\" }
+			Elseif (-not ($DisableFunctionLogging)) {
+				Write-Log -Message "SID parameter specified but the registry hive of the key is not HKEY_CURRENT_USER." -Source ${CmdletName} -Severity 2
+			}
 		}
-
-		## Append the PowerShell drive to the registry key path
-		If ($key -notmatch '^Registry::') {[string]$key = "Registry::$key" }
 
 		If($Key -match '^Registry::HKEY_LOCAL_MACHINE|^Registry::HKEY_CLASSES_ROOT|^Registry::HKEY_CURRENT_USER|^Registry::HKEY_USERS|^Registry::HKEY_CURRENT_CONFIG|^Registry::HKEY_PERFORMANCE_DATA') {
 			## Check for expected key string format
-			Write-Log -Message "Return fully qualified registry key path [$key]." -Source ${CmdletName}
+			If (-not ($DisableFunctionLogging)) {
+				Write-Log -Message "Return fully qualified registry key path [$key]." -Source ${CmdletName}
+			}
 			Write-Output -InputObject $key
 		}
 		Else{
@@ -4213,7 +4250,7 @@ Function Set-RegistryKey {
 					# Forward slash was found in Key. Use REG.exe ADD to create registry key
 					Else
 					{
-						[string]$CreateRegkeyResult = & reg.exe Add "$($Key.Substring($Key.IndexOf('::') + 2))"
+						[string]$CreateRegkeyResult = & "$envWinDir\System32\reg.exe" Add "$($Key.Substring($Key.IndexOf('::') + 2))"
 						If ($global:LastExitCode -ne 0)
 						{
 							Throw "Failed to create registry key [$Key]"
@@ -4444,7 +4481,7 @@ Function Invoke-HKCURegistrySettingsForAllUsers {
 					#  Load the User registry hive if the registry hive file exists
 					If (Test-Path -LiteralPath $UserRegistryHiveFile -PathType 'Leaf') {
 						Write-Log -Message "Load the User [$($UserProfile.NTAccount)] registry hive in path [HKEY_USERS\$($UserProfile.SID)]." -Source ${CmdletName}
-						[string]$HiveLoadResult = & reg.exe load "`"HKEY_USERS\$($UserProfile.SID)`"" "`"$UserRegistryHiveFile`""
+						[string]$HiveLoadResult = & "$envWinDir\System32\reg.exe" load "`"HKEY_USERS\$($UserProfile.SID)`"" "`"$UserRegistryHiveFile`""
 
 						If ($global:LastExitCode -ne 0) {
 							Throw "Failed to load the registry hive for User [$($UserProfile.NTAccount)] with SID [$($UserProfile.SID)]. Failure message [$HiveLoadResult]. Continue..."
@@ -4473,7 +4510,7 @@ Function Invoke-HKCURegistrySettingsForAllUsers {
 				If ($ManuallyLoadedRegHive) {
 					Try {
 						Write-Log -Message "Unload the User [$($UserProfile.NTAccount)] registry hive in path [HKEY_USERS\$($UserProfile.SID)]." -Source ${CmdletName}
-						[string]$HiveLoadResult = & reg.exe unload "`"HKEY_USERS\$($UserProfile.SID)`""
+						[string]$HiveLoadResult = & "$envWinDir\System32\reg.exe" unload "`"HKEY_USERS\$($UserProfile.SID)`""
 
 						If ($global:LastExitCode -ne 0) {
 							Write-Log -Message "REG.exe failed to unload the registry hive and exited with exit code [$($global:LastExitCode)]. Performing manual garbage collection to ensure successful unloading of registry hive." -Severity 2 -Source ${CmdletName}
@@ -4482,7 +4519,7 @@ Function Invoke-HKCURegistrySettingsForAllUsers {
 							Start-Sleep -Seconds 5
 
 							Write-Log -Message "Unload the User [$($UserProfile.NTAccount)] registry hive in path [HKEY_USERS\$($UserProfile.SID)]." -Source ${CmdletName}
-							[string]$HiveLoadResult = & reg.exe unload "`"HKEY_USERS\$($UserProfile.SID)`""
+							[string]$HiveLoadResult = & "$envWinDir\System32\reg.exe" unload "`"HKEY_USERS\$($UserProfile.SID)`""
 							If ($global:LastExitCode -ne 0) { Throw "REG.exe failed with exit code [$($global:LastExitCode)] and result [$HiveLoadResult]." }
 						}
 					}
@@ -4675,7 +4712,8 @@ Function Get-UserProfiles {
 			ForEach-Object {
 				Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction 'Stop' | Where-Object { ($_.ProfileImagePath) } |
 				Select-Object @{ Label = 'NTAccount'; Expression = { $(ConvertTo-NTAccountOrSID -SID $_.PSChildName).Value } }, @{ Label = 'SID'; Expression = { $_.PSChildName } }, @{ Label = 'ProfilePath'; Expression = { $_.ProfileImagePath } }
-			}
+			} |
+            Where-Object { $_.NTAccount } ## This removes "defaultuser0" account, which is Windows's 10 bug
 			If ($ExcludeSystemProfiles) {
 				[string[]]$SystemProfiles = 'S-1-5-18', 'S-1-5-19', 'S-1-5-20'
 				[psobject[]]$UserProfiles = $UserProfiles | Where-Object { $SystemProfiles -notcontains $_.SID }
@@ -5034,6 +5072,7 @@ Function Execute-ProcessAsUser {
 		## Get the name of this function and write header
 		[string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
 		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -CmdletBoundParameters $PSBoundParameters -Header
+		[string]$executeAsUserTempPath = Join-Path -Path $dirAppDeployTemp -ChildPath 'ExecuteAsUser'
 	}
 	Process {
 		## Initialize exit code variable
@@ -5067,15 +5106,34 @@ Function Execute-ProcessAsUser {
 		## Build the scheduled task XML name
 		[string]$schTaskName = "$appDeployToolkitName-ExecuteAsUser"
 
-		##  Create the temporary App Deploy Toolkit files folder if it doesn't already exist
-		If (-not (Test-Path -LiteralPath $dirAppDeployTemp -PathType 'Container')) {
-			New-Item -Path $dirAppDeployTemp -ItemType 'Directory' -Force -ErrorAction 'Stop'
+		##  Remove and recreate the temporary folder
+		If (Test-Path -LiteralPath $executeAsUserTempPath -PathType 'Container') {
+			Write-Log -Message "Previous [$executeAsUserTempPath] found. Attempting removal." -Source ${CmdletName}
+			Remove-Folder -Path $executeAsUserTempPath
+		}
+		Write-Log -Message "Creating [$executeAsUserTempPath]." -Source ${CmdletName}
+		Try {
+			$null = New-Item -Path $executeAsUserTempPath -ItemType 'Directory' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Log -Message "Unable to create [$executeAsUserTempPath]. Possible attempt to gain elevated rights." -Source ${CmdletName} -Severity 2
 		}
 
 		## If PowerShell.exe is being launched, then create a VBScript to launch PowerShell so that we can suppress the console window that flashes otherwise
-		If (($Path -eq 'PowerShell.exe') -or ((Split-Path -Path $Path -Leaf) -eq 'PowerShell.exe')) {
+		If (((Split-Path -Path $Path -Leaf) -like 'PowerShell*') -or ((Split-Path -Path $Path -Leaf) -like 'cmd*')) {
+			If ($SecureParameters) {
+				Write-Log -Message "Preparing a vbs script that will start [$Path] (Parameters Hidden) as the logged-on user [$userName] silently..." -Source ${CmdletName}
+			}
+			Else {
+				Write-Log -Message "Preparing a vbs script that will start [$Path $Parameters] as the logged-on user [$userName] silently..." -Source ${CmdletName}
+			}
 			# Permit inclusion of double quotes in parameters
-			If ($($Parameters.Substring($Parameters.Length - 1)) -eq '"') {
+			$QuotesIndex = $Parameters.Length - 1
+			If ($QuotesIndex -lt 0) {
+				$QuotesIndex = 0
+			}
+
+			If ($($Parameters.Substring($QuotesIndex)) -eq '"') {
 				[string]$executeProcessAsUserParametersVBS = 'chr(34) & ' + "`"$($Path)`"" + ' & chr(34) & ' + '" ' + ($Parameters -replace "`r`n", ';' -replace "`n", ';' -replace '"', "`" & chr(34) & `"" -replace ' & chr\(34\) & "$', '') + ' & chr(34)' }
 			Else {
 				[string]$executeProcessAsUserParametersVBS = 'chr(34) & ' + "`"$($Path)`"" + ' & chr(34) & ' + '" ' + ($Parameters -replace "`r`n", ';' -replace "`n", ';' -replace '"', "`" & chr(34) & `"" -replace ' & chr\(34\) & "$','') + '"' }
@@ -5083,9 +5141,16 @@ Function Execute-ProcessAsUser {
 			$executeProcessAsUserScript += 'set oWShell = CreateObject("WScript.Shell")'
 			$executeProcessAsUserScript += 'intReturn = oWShell.Run(strCommand, 0, true)'
 			$executeProcessAsUserScript += 'WScript.Quit intReturn'
-			$executeProcessAsUserScript | Out-File -FilePath "$dirAppDeployTemp\$($schTaskName).vbs" -Force -Encoding 'default' -ErrorAction 'SilentlyContinue'
-			$Path = 'wscript.exe'
-			$Parameters = "`"$dirAppDeployTemp\$($schTaskName).vbs`""
+			$executeProcessAsUserScript | Out-File -FilePath "$executeAsUserTempPath\$($schTaskName).vbs" -Force -Encoding 'default' -ErrorAction 'SilentlyContinue'
+			$Path = "$envWinDir\System32\wscript.exe"
+			$Parameters = "`"$executeAsUserTempPath\$($schTaskName).vbs`""
+
+			try {
+				Set-ItemPermission -Path "$executeAsUserTempPath\$schTaskName.vbs" -User $UserName -Permission 'Read'
+			}
+			catch {
+				Write-Log -Message "Failed to set read permissions on path [$executeAsUserTempPath\$schTaskName.vbs]. The function might not be able to work correctly." -Source ${CmdletName} -Severity 2
+			}
 		}
 
 		## Prepare working directory insert
@@ -5138,6 +5203,7 @@ Function Execute-ProcessAsUser {
 			#  Specify the filename to export the XML to
 			[string]$xmlSchTaskFilePath = "$dirAppDeployTemp\$schTaskName.xml"
 			[string]$xmlSchTask | Out-File -FilePath $xmlSchTaskFilePath -Force -ErrorAction 'Stop'
+			Set-ItemPermission -Path $xmlSchTaskFilePath -User $UserName -Permission 'Read'
 		}
 		Catch {
 			[int32]$executeProcessAsUserExitCode = 60007
@@ -5151,16 +5217,16 @@ Function Execute-ProcessAsUser {
 		## Create Scheduled Task to run the process with a logged-on user account
 		If ($Parameters) {
 			If ($SecureParameters) {
-				Write-Log -Message "Create scheduled task to run the process [$Path] (Parameters Hidden) as the logged-on user [$userName]..." -Source ${CmdletName}
+				Write-Log -Message "Creating scheduled task to run the process [$Path] (Parameters Hidden) as the logged-on user [$userName]..." -Source ${CmdletName}
 			}
 			Else {
-				Write-Log -Message "Create scheduled task to run the process [$Path $Parameters] as the logged-on user [$userName]..." -Source ${CmdletName}
+				Write-Log -Message "Creating scheduled task to run the process [$Path $Parameters] as the logged-on user [$userName]..." -Source ${CmdletName}
 			}
 		}
 		Else {
-			Write-Log -Message "Create scheduled task to run the process [$Path] as the logged-on user [$userName]..." -Source ${CmdletName}
+			Write-Log -Message "Creating scheduled task to run the process [$Path] as the logged-on user [$userName]..." -Source ${CmdletName}
 		}
-		[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/create /f /tn $schTaskName /xml `"$xmlSchTaskFilePath`"" -WindowStyle 'Hidden' -CreateNoWindow -PassThru
+		[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/create /f /tn $schTaskName /xml `"$xmlSchTaskFilePath`"" -WindowStyle 'Hidden' -CreateNoWindow -PassThru -ExitOnProcessFailure $false
 		If ($schTaskResult.ExitCode -ne 0) {
 			[int32]$executeProcessAsUserExitCode = $schTaskResult.ExitCode
 			Write-Log -Message "Failed to create the scheduled task by importing the scheduled task XML file [$xmlSchTaskFilePath]." -Severity 3 -Source ${CmdletName}
@@ -5182,13 +5248,13 @@ Function Execute-ProcessAsUser {
 		Else {
 			Write-Log -Message "Trigger execution of scheduled task with command [$Path] as the logged-on user [$userName]..." -Source ${CmdletName}
 		}
-		[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/run /i /tn $schTaskName" -WindowStyle 'Hidden' -CreateNoWindow -Passthru
+		[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/run /i /tn $schTaskName" -WindowStyle 'Hidden' -CreateNoWindow -Passthru -ExitOnProcessFailure $false
 		If ($schTaskResult.ExitCode -ne 0) {
 			[int32]$executeProcessAsUserExitCode = $schTaskResult.ExitCode
 			Write-Log -Message "Failed to trigger scheduled task [$schTaskName]." -Severity 3 -Source ${CmdletName}
 			#  Delete Scheduled Task
 			Write-Log -Message 'Delete the scheduled task which did not trigger.' -Source ${CmdletName}
-			Execute-Process -Path $exeSchTasks -Parameters "/delete /tn $schTaskName /f" -WindowStyle 'Hidden' -CreateNoWindow -IgnoreExitCodes "*"
+			Execute-Process -Path $exeSchTasks -Parameters "/delete /tn $schTaskName /f" -WindowStyle 'Hidden' -CreateNoWindow -ExitOnProcessFailure $false
 			If (-not $ContinueOnError) {
 				Throw "Failed to trigger scheduled task [$schTaskName]."
 			}
@@ -5241,6 +5307,16 @@ Function Execute-ProcessAsUser {
 		}
 		Catch {
 			Write-Log -Message "Failed to delete scheduled task [$schTaskName]. `n$(Resolve-Error)" -Severity 3 -Source ${CmdletName}
+		}
+
+		## Remove the XML scheduled task file
+		If (Test-Path -LiteralPath $xmlSchTaskFilePath -PathType 'Leaf') {
+			Remove-File -Path $xmlSchTaskFilePath
+		}
+
+		##  Remove the temporary folder
+		If (Test-Path -LiteralPath $executeAsUserTempPath -PathType 'Container') {
+			Remove-Folder -Path $executeAsUserTempPath
 		}
 	}
 	End {
@@ -5375,8 +5451,8 @@ Set-Alias -Name 'Refresh-SessionEnvironmentVariables' -Value 'Update-SessionEnvi
 #endregion
 
 
-#region Function Get-ScheduledTask
-Function Get-ScheduledTask {
+#region Function Get-SchedulerTask
+Function Get-SchedulerTask {
 <#
 .SYNOPSIS
 	Retrieve all details for scheduled tasks on the local computer.
@@ -5387,13 +5463,13 @@ Function Get-ScheduledTask {
 .PARAMETER ContinueOnError
 	Continue if an error is encountered. Default: $true.
 .EXAMPLE
-	Get-ScheduledTask
+	Get-SchedulerTask
 	To display a list of all scheduled task properties.
 .EXAMPLE
-	Get-ScheduledTask | Out-GridView
+	Get-SchedulerTask | Out-GridView
 	To display a grid view of all scheduled task properties.
 .EXAMPLE
-	Get-ScheduledTask | Select-Object -Property TaskName
+	Get-SchedulerTask | Select-Object -Property TaskName
 	To display a list of all scheduled task names.
 .NOTES
 .LINK
@@ -5414,7 +5490,6 @@ Function Get-ScheduledTask {
 		[string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
 		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -CmdletBoundParameters $PSBoundParameters -Header
 
-		If (-not $exeSchTasks) { [string]$exeSchTasks = "$env:WINDIR\system32\schtasks.exe" }
 		[psobject[]]$ScheduledTasks = @()
 	}
 	Process {
@@ -5454,6 +5529,10 @@ Function Get-ScheduledTask {
 		Write-Output -InputObject $ScheduledTasks
 		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -Footer
 	}
+}
+# If Get-ScheduledTask doesn't exist, add alias Get-ScheduledTask
+If (-not (Get-Command -Name "Get-ScheduledTask" -ErrorAction SilentlyContinue)) {
+	New-Alias -Name "Get-ScheduledTask" -Value "Get-SchedulerTask"
 }
 #endregion
 
@@ -5499,7 +5578,8 @@ Function Block-AppExecution {
 		[char[]]$invalidScheduledTaskChars = '$', '!', '''', '"', '(', ')', ';', '\', '`', '*', '?', '{', '}', '[', ']', '<', '>', '|', '&', '%', '#', '~', '@', ' '
 		[string]$SchInstallName = $installName
 		ForEach ($invalidChar in $invalidScheduledTaskChars) { [string]$SchInstallName = $SchInstallName -replace [regex]::Escape($invalidChar),'' }
-		[string]$schTaskUnblockAppsCommand += "-ExecutionPolicy Bypass -NoProfile -NoLogo -WindowStyle Hidden -File `"$dirAppDeployTemp\$scriptFileName`" -CleanupBlockedApps -ReferredInstallName `"$SchInstallName`" -ReferredInstallTitle `"$installTitle`" -ReferredLogName `"$logName`" -AsyncToolkitLaunch"
+		[string]$blockExecutionTempPath = Join-Path -Path $dirAppDeployTemp -ChildPath 'BlockExecution'
+		[string]$schTaskUnblockAppsCommand += "-ExecutionPolicy Bypass -NoProfile -NoLogo -WindowStyle Hidden -File `"$blockExecutionTempPath\$scriptFileName`" -CleanupBlockedApps -ReferredInstallName `"$SchInstallName`" -ReferredInstallTitle `"$installTitle`" -ReferredLogName `"$logName`" -AsyncToolkitLaunch"
 		## Specify the scheduled task configuration in XML format
 		[string]$xmlUnblockAppsSchTask = @"
 <?xml version="1.0" encoding="UTF-16"?>
@@ -5536,7 +5616,7 @@ Function Block-AppExecution {
 	</Settings>
 	<Actions Context="Author">
 		<Exec>
-			<Command>powershell.exe</Command>
+			<Command>$PSHome\powershell.exe</Command>
 			<Arguments>$schTaskUnblockAppsCommand</Arguments>
 		</Exec>
 	</Actions>
@@ -5544,9 +5624,14 @@ Function Block-AppExecution {
 "@
 	}
 	Process {
+		## Bypass if no Admin rights
+		If ($configToolkitRequireAdmin -eq $false) {
+			Write-Log -Message "Bypassing Function [${CmdletName}], because [Require Admin: $configToolkitRequireAdmin]." -Source ${CmdletName}
+			Return
+		}
 		## Bypass if in NonInteractive mode
 		If ($deployModeNonInteractive) {
-			Write-Log -Message "Bypassing Function [${CmdletName}] [Mode: $deployMode]." -Source ${CmdletName}
+			Write-Log -Message "Bypassing Function [${CmdletName}], because [Mode: $deployMode]." -Source ${CmdletName}
 			Return
 		}
 
@@ -5556,30 +5641,47 @@ Function Block-AppExecution {
 		If (Test-Path -LiteralPath "$configToolkitTempPath\PSAppDeployToolkit" -PathType 'Leaf' -ErrorAction 'SilentlyContinue') {
 			$null = Remove-Item -LiteralPath "$configToolkitTempPath\PSAppDeployToolkit" -Force -ErrorAction 'SilentlyContinue'
 		}
-		## Create Temporary directory (if required) and copy Toolkit so it can be called by scheduled task later if required
-		If (-not (Test-Path -LiteralPath $dirAppDeployTemp -PathType 'Container' -ErrorAction 'SilentlyContinue')) {
-			$null = New-Item -Path $dirAppDeployTemp -ItemType 'Directory' -ErrorAction 'SilentlyContinue'
+
+		If (Test-Path -LiteralPath $blockExecutionTempPath -PathType 'Container') {
+			Remove-Folder -Path $blockExecutionTempPath
 		}
 
-		Copy-Item -Path "$scriptRoot\*.*" -Destination $dirAppDeployTemp -Exclude 'thumbs.db' -Force -Recurse -ErrorAction 'SilentlyContinue'
+		Try {
+			$null = New-Item -Path $blockExecutionTempPath -ItemType 'Directory' -ErrorAction 'Stop'
+		}
+		Catch {
+			Write-Log -Message "Unable to create [$blockExecutionTempPath]. Possible attempt to gain elevated rights." -Source ${CmdletName}
+		}
+
+		Copy-Item -Path "$scriptRoot\*.*" -Destination $blockExecutionTempPath -Exclude 'thumbs.db' -Force -Recurse -ErrorAction 'SilentlyContinue'
 
 		## Build the debugger block value script
-		[string]$debuggerBlockMessageCmd = "`"powershell.exe -ExecutionPolicy Bypass -NoProfile -NoLogo -WindowStyle Hidden -File `" & chr(34) & `"$dirAppDeployTemp\$scriptFileName`" & chr(34) & `" -ShowBlockedAppDialog -AsyncToolkitLaunch -ReferredInstallTitle `" & chr(34) & `"$installTitle`" & chr(34)"
+		[string]$debuggerBlockMessageCmd = "`"$PSHome\powershell.exe -ExecutionPolicy Bypass -NoProfile -NoLogo -WindowStyle Hidden -File `" & chr(34) & `"$blockExecutionTempPath\$scriptFileName`" & chr(34) & `" -ShowBlockedAppDialog -AsyncToolkitLaunch -ReferredInstallTitle `" & chr(34) & `"$installTitle`" & chr(34)"
 		[string[]]$debuggerBlockScript = "strCommand = $debuggerBlockMessageCmd"
 		$debuggerBlockScript += 'set oWShell = CreateObject("WScript.Shell")'
 		$debuggerBlockScript += 'oWShell.Run strCommand, 0, false'
-		$debuggerBlockScript | Out-File -FilePath "$dirAppDeployTemp\AppDeployToolkit_BlockAppExecutionMessage.vbs" -Force -Encoding 'default' -ErrorAction 'SilentlyContinue'
-		[string]$debuggerBlockValue = "wscript.exe `"$dirAppDeployTemp\AppDeployToolkit_BlockAppExecutionMessage.vbs`""
+		$debuggerBlockScript | Out-File -FilePath "$blockExecutionTempPath\AppDeployToolkit_BlockAppExecutionMessage.vbs" -Force -Encoding 'default' -ErrorAction 'SilentlyContinue'
+		[string]$debuggerBlockValue = "$envWinDir\System32\wscript.exe `"$blockExecutionTempPath\AppDeployToolkit_BlockAppExecutionMessage.vbs`""
 
+		## Set contents to be readable for all users (BUILTIN\USERS)
+		try {
+			$Users = ConvertTo-NTAccountOrSID -SID "S-1-5-32-545"
+			Set-ItemPermission -Path $blockExecutionTempPath -User $Users -Permission 'Read' -Inheritance "ObjectInherit","ContainerInherit"
+		}
+		catch {
+			Write-Log -Message "Failed to set read permissions on path [$blockExecutionTempPath]. The function might not be able to work correctly." -Source ${CmdletName} -Severity 2
+		}
+			
 		## Create a scheduled task to run on startup to call this script and clean up blocked applications in case the installation is interrupted, e.g. user shuts down during installation"
 		Write-Log -Message 'Create scheduled task to cleanup blocked applications in case installation is interrupted.' -Source ${CmdletName}
-		If (Get-ScheduledTask -ContinueOnError $true | Select-Object -Property 'TaskName' | Where-Object { $_.TaskName -eq "\$schTaskBlockedAppsName" }) {
+		If (Get-SchedulerTask -ContinueOnError $true | Select-Object -Property 'TaskName' | Where-Object { $_.TaskName -eq "\$schTaskBlockedAppsName" }) {
 			Write-Log -Message "Scheduled task [$schTaskBlockedAppsName] already exists." -Source ${CmdletName}
 		}
 		Else {
 			## Export the scheduled task XML to file
 			Try {
-				#  Specify the filename to export the XML to
+				## Specify the filename to export the XML to
+				## XML does not need to be user readable to stays in protected TEMP folder
 				[string]$xmlSchTaskFilePath = "$dirAppDeployTemp\SchTaskUnBlockApps.xml"
 				[string]$xmlUnblockAppsSchTask | Out-File -FilePath $xmlSchTaskFilePath -Force -ErrorAction 'Stop'
 			}
@@ -5589,7 +5691,7 @@ Function Block-AppExecution {
 			}
 
 			## Import the Scheduled Task XML file to create the Scheduled Task
-			[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/create /f /tn $schTaskBlockedAppsName /xml `"$xmlSchTaskFilePath`"" -WindowStyle 'Hidden' -CreateNoWindow -PassThru
+			[psobject]$schTaskResult = Execute-Process -Path $exeSchTasks -Parameters "/create /f /tn $schTaskBlockedAppsName /xml `"$xmlSchTaskFilePath`"" -WindowStyle 'Hidden' -CreateNoWindow -PassThru -ExitOnProcessFailure $false
 			If ($schTaskResult.ExitCode -ne 0) {
 				Write-Log -Message "Failed to create the scheduled task [$schTaskBlockedAppsName] by importing the scheduled task XML file [$xmlSchTaskFilePath]." -Severity 3 -Source ${CmdletName}
 				Return
@@ -5638,9 +5740,14 @@ Function Unblock-AppExecution {
 		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -CmdletBoundParameters $PSBoundParameters -Header
 	}
 	Process {
+		## Bypass if no Admin rights
+		If ($configToolkitRequireAdmin -eq $false) {
+			Write-Log -Message "Bypassing Function [${CmdletName}], because [Require Admin: $configToolkitRequireAdmin]." -Source ${CmdletName}
+			Return
+		}
 		## Bypass if in NonInteractive mode
 		If ($deployModeNonInteractive) {
-			Write-Log -Message "Bypassing Function [${CmdletName}] [Mode: $deployMode]." -Source ${CmdletName}
+			Write-Log -Message "Bypassing Function [${CmdletName}], because [Mode: $deployMode]." -Source ${CmdletName}
 			Return
 		}
 
@@ -5661,13 +5768,25 @@ Function Unblock-AppExecution {
 		## Remove the scheduled task if it exists
 		[string]$schTaskBlockedAppsName = $installName + '_BlockedApps'
 		Try {
-			If (Get-ScheduledTask -ContinueOnError $true | Select-Object -Property 'TaskName' | Where-Object { $_.TaskName -eq "\$schTaskBlockedAppsName" }) {
+			If (Get-SchedulerTask -ContinueOnError $true | Select-Object -Property 'TaskName' | Where-Object { $_.TaskName -eq "\$schTaskBlockedAppsName" }) {
 				Write-Log -Message "Delete Scheduled Task [$schTaskBlockedAppsName]." -Source ${CmdletName}
 				Execute-Process -Path $exeSchTasks -Parameters "/Delete /TN $schTaskBlockedAppsName /F"
 			}
 		}
 		Catch {
 			Write-Log -Message "Error retrieving/deleting Scheduled Task.`n$(Resolve-Error)" -Severity 3 -Source ${CmdletName}
+		}
+
+		## Remove BlockAppExecution Schedule Task XML file
+		[string]$xmlSchTaskFilePath = "$dirAppDeployTemp\SchTaskUnBlockApps.xml"
+		If (Test-Path -LiteralPath $xmlSchTaskFilePath) {
+			Remove-Item -Path $xmlSchTaskFilePath
+		}
+
+		## Remove BlockAppExection Temporary directory
+		[string]$blockExecutionTempPath = Join-Path -Path $dirAppDeployTemp -ChildPath 'BlockExecution'
+		If (Test-Path -LiteralPath $blockExecutionTempPath -PathType 'Container') {
+			Remove-Folder -Path $blockExecutionTempPath
 		}
 	}
 	End {
@@ -7553,8 +7672,8 @@ Function Show-InstallationProgress {
 					#  Calculate the position on the screen where the progress dialog should be placed
 					[int32]$screenWidth = [System.Windows.SystemParameters]::WorkArea.Width
 					[int32]$screenHeight = [System.Windows.SystemParameters]::WorkArea.Height
-					[int32]$screenCenterWidth = $screenWidth - $script:ProgressSyncHash.Window.Width
-					[int32]$screenCenterHeight = $screenHeight - $script:ProgressSyncHash.Window.Height
+					[int32]$screenCenterWidth = $screenWidth - $script:ProgressSyncHash.Window.ActualWidth
+					[int32]$screenCenterHeight = $screenHeight - $script:ProgressSyncHash.Window.ActualHeight
 					#  Set the start position of the Window based on the screen size
 					If ($windowLocation -eq 'BottomRight') {
 						#  Put the window in the corner
@@ -7820,7 +7939,7 @@ Function Set-PinnedApplication {
 						return
 					}
 
-					$ExplorerCommandHandler = Get-RegistryKey -Key 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\Windows.taskbarpin' -Value 'ExplorerCommandHandler'
+					$ExplorerCommandHandler = Get-RegistryKey -Key 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\Windows.taskbarpin' -Value 'ExplorerCommandHandler'
 					$classesStarKey = (Get-Item "Registry::HKEY_USERS\$($RunasActiveUser.SID)\SOFTWARE\Classes").OpenSubKey("*", $true)
 					$shellKey = $classesStarKey.CreateSubKey("shell", $true)
 					$specialKey = $shellKey.CreateSubKey("{:}", $true)
@@ -8180,7 +8299,7 @@ Function Invoke-RegisterOrUnregisterDLL {
 				}
 			}
 
-			[psobject]$ExecuteResult = Execute-Process -Path $RegSvr32Path -Parameters $DLLActionParameters -WindowStyle 'Hidden' -PassThru
+			[psobject]$ExecuteResult = Execute-Process -Path $RegSvr32Path -Parameters $DLLActionParameters -WindowStyle 'Hidden' -PassThru -ExitOnProcessFailure $false
 
 			If ($ExecuteResult.ExitCode -ne 0) {
 				If ($ExecuteResult.ExitCode -eq 60002) {
@@ -8902,7 +9021,7 @@ Function Install-MSUpdates {
 						#  Installation type for executables (i.e., Microsoft Office Updates)
 						'.exe' { Execute-Process -Path $file.FullName -Parameters '/quiet /norestart' -WindowStyle 'Hidden' -IgnoreExitCodes "*" }
 						#  Installation type for Windows updates using Windows Update Standalone Installer
-						'.msu' { Execute-Process -Path 'wusa.exe' -Parameters "`"$($file.FullName)`" /quiet /norestart" -WindowStyle 'Hidden' -IgnoreExitCodes "*" }
+						'.msu' { Execute-Process -Path $exeWusa -Parameters "`"$($file.FullName)`" /quiet /norestart" -WindowStyle 'Hidden' -IgnoreExitCodes "*" }
 						#  Installation type for Windows Installer Patch
 						'.msp' { Execute-MSI -Action 'Patch' -Path $file.FullName -IgnoreExitCodes "*" }
 					}
@@ -9699,7 +9818,7 @@ Function Update-GroupPolicy {
 					[string]$InstallMsg = 'Update Group Policies for the User'
 					Write-Log -Message "$($InstallMsg)..." -Source ${CmdletName}
 				}
-				[psobject]$ExecuteResult = Execute-Process -Path "$envWindir\system32\cmd.exe" -Parameters $GPUpdateCmd -WindowStyle 'Hidden' -PassThru
+				[psobject]$ExecuteResult = Execute-Process -Path "$envWinDir\system32\cmd.exe" -Parameters $GPUpdateCmd -WindowStyle 'Hidden' -PassThru -ExitOnProcessFailure $false
 
 				If ($ExecuteResult.ExitCode -ne 0) {
 					If ($ExecuteResult.ExitCode -eq 60002) {
@@ -9757,7 +9876,7 @@ Function Enable-TerminalServerInstallMode {
 	Process {
 		Try {
 			Write-Log -Message 'Change terminal server into user install mode...' -Source ${CmdletName}
-			$terminalServerResult = & change.exe User /Install
+			$terminalServerResult = & "$envWinDir\System32\change.exe" User /Install
 
 			If ($global:LastExitCode -ne 1) { Throw $terminalServerResult }
 		}
@@ -9805,7 +9924,7 @@ Function Disable-TerminalServerInstallMode {
 	Process {
 		Try {
 			Write-Log -Message 'Change terminal server into user execute mode...' -Source ${CmdletName}
-			$terminalServerResult = & change.exe User /Execute
+			$terminalServerResult = & "$envWinDir\System32\change.exe" User /Execute
 
 			If ($global:LastExitCode -ne 1) { Throw $terminalServerResult }
 		}
@@ -9855,6 +9974,8 @@ Function Set-ActiveSetup {
 	Remove Active Setup entry from HKLM registry hive. Will also load each logon user's HKCU registry hive to remove Active Setup entry.
 .PARAMETER DisableActiveSetup
 	Disables the Active Setup entry so that the StubPath file will not be executed.
+.PARAMETER ExecuteForCurrentUser
+	Specifies whether the StubExePath should be executed for the current user. Since this user is already logged in, the user won't have the application started without logging out and logging back in. Default: $True
 .PARAMETER ContinueOnError
 	Continue if an error is encountered. Default is: $true.
 .EXAMPLE
@@ -9894,6 +10015,9 @@ Function Set-ActiveSetup {
 		[switch]$DisableActiveSetup = $false,
 		[Parameter(Mandatory=$true,ParameterSetName='Purge')]
 		[switch]$PurgeActiveSetupKey,
+		[Parameter(Mandatory=$false,ParameterSetName='Create')]
+		[ValidateNotNullorEmpty()]
+		[boolean]$ExecuteForCurrentUser = $true,
 		[Parameter(Mandatory=$false)]
 		[ValidateNotNullorEmpty()]
 		[boolean]$ContinueOnError = $true
@@ -9906,15 +10030,15 @@ Function Set-ActiveSetup {
 	}
 	Process {
 		Try {
-			[string]$ActiveSetupKey = "HKLM:SOFTWARE\Microsoft\Active Setup\Installed Components\$Key"
-			[string]$HKCUActiveSetupKey = "HKCU:Software\Microsoft\Active Setup\Installed Components\$Key"
+			[string]$ActiveSetupKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Active Setup\Installed Components\$Key"
+			[string]$HKCUActiveSetupKey = "Registry::HKEY_CURRENT_USER\Software\Microsoft\Active Setup\Installed Components\$Key"
 
 			## Delete Active Setup registry entry from the HKLM hive and for all logon user registry hives on the system
 			If ($PurgeActiveSetupKey) {
-				Write-Log -Message "Remove Active Setup entry [$ActiveSetupKey]." -Source ${CmdletName}
+				Write-Log -Message "Removing Active Setup entry [$ActiveSetupKey]." -Source ${CmdletName}
 				Remove-RegistryKey -Key $ActiveSetupKey -Recurse
 
-				Write-Log -Message "Remove Active Setup entry [$HKCUActiveSetupKey] for all log on user registry hives on the system." -Source ${CmdletName}
+				Write-Log -Message "Removing Active Setup entry [$HKCUActiveSetupKey] for all log on user registry hives on the system." -Source ${CmdletName}
 				[scriptblock]$RemoveHKCUActiveSetupKey = {
 					If (Get-RegistryKey -Key $HKCUActiveSetupKey -SID $UserProfile.SID) {
 						Remove-RegistryKey -Key $HKCUActiveSetupKey -SID $UserProfile.SID -Recurse
@@ -10007,32 +10131,44 @@ Function Set-ActiveSetup {
 				}
 
 			}
+
+			Write-Log -Message "Adding Active Setup Key for local machine: [$ActiveSetupKey]." -Source ${CmdletName}
 			& $SetActiveSetupRegKeys -ActiveSetupRegKey $ActiveSetupKey
 
 			## Execute the StubPath file for the current user as long as not in Session 0
 			If ($SessionZero) {
 				If ($RunAsActiveUser) {
-					Write-Log -Message "Session 0 detected: Execute Active Setup StubPath file for currently logged in user [$($RunAsActiveUser.NTAccount)]." -Source ${CmdletName}
-					If ($CUArguments) {
-						Execute-ProcessAsUser -Path $CUStubExePath -Parameters $CUArguments -Wait -ContinueOnError $true
+					If ($ExecuteForCurrentUser) {
+						Write-Log -Message "Session 0 detected: Executing Active Setup StubPath file for currently logged in user [$($RunAsActiveUser.NTAccount)]." -Source ${CmdletName}
+						If ($CUArguments) {
+							Execute-ProcessAsUser -Path $CUStubExePath -Parameters $CUArguments -Wait -ContinueOnError $true
+						}
+						Else {
+							Execute-ProcessAsUser -Path $CUStubExePath -Wait -ContinueOnError $true
+						}				
 					}
-					Else {
-						Execute-ProcessAsUser -Path $CUStubExePath -Wait -ContinueOnError $true
-					}
+
+					Write-Log -Message "Adding Active Setup Key for the current user: [$HKCUActiveSetupKey]." -Source ${CmdletName}
 					& $SetActiveSetupRegKeys -ActiveSetupRegKey $HKCUActiveSetupKey -SID $RunAsActiveUser.SID
 				}
 				Else {
-					Write-Log -Message 'Session 0 detected: No logged in users detected. Active Setup StubPath file will execute when users first log into their account.' -Source ${CmdletName}
+					If ($ExecuteForCurrentUser) {
+						Write-Log -Message 'Session 0 detected: No logged in users detected. Active Setup StubPath file will execute when users first log into their account.' -Source ${CmdletName}
+					}
 				}
 			}
 			Else {
-				Write-Log -Message 'Execute Active Setup StubPath file for the current user.' -Source ${CmdletName}
-				If ($CUArguments) {
-					$ExecuteResults = Execute-Process -FilePath $CUStubExePath -Parameters $CUArguments -PassThru
+				If ($ExecuteForCurrentUser) {
+					Write-Log -Message 'Executing Active Setup StubPath file for the current user.' -Source ${CmdletName}
+					If ($CUArguments) {
+						$ExecuteResults = Execute-Process -FilePath $CUStubExePath -Parameters $CUArguments -PassThru -ExitOnProcessFailure $false
+					}
+					Else {
+						$ExecuteResults = Execute-Process -FilePath $CUStubExePath -PassThru -ExitOnProcessFailure $false
+					}
 				}
-				Else {
-					$ExecuteResults = Execute-Process -FilePath $CUStubExePath -PassThru
-				}
+
+				Write-Log -Message "Adding Active Setup Key for the current user: [$HKCUActiveSetupKey]." -Source ${CmdletName}
 				& $SetActiveSetupRegKeys -ActiveSetupRegKey $HKCUActiveSetupKey
 			}
 		}
@@ -10422,7 +10558,7 @@ Function Get-ServiceStartMode
 			## If on Windows Vista or higher, check to see if service is set to Automatic (Delayed Start)
 			If (($ServiceStartMode -eq 'Automatic') -and (([version]$envOSVersion).Major -gt 5)) {
 				Try {
-					[string]$ServiceRegistryPath = "HKLM:SYSTEM\CurrentControlSet\Services\$Name"
+					[string]$ServiceRegistryPath = "Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\$Name"
 					[int32]$DelayedAutoStart = Get-ItemProperty -LiteralPath $ServiceRegistryPath -ErrorAction 'Stop' | Select-Object -ExpandProperty 'DelayedAutoStart' -ErrorAction 'Stop'
 					If ($DelayedAutoStart -eq 1) { $ServiceStartMode = 'Automatic (Delayed Start)' }
 				}
@@ -10501,7 +10637,7 @@ Function Set-ServiceStartMode
 			If ($StartMode -eq 'Manual') { $ScExeStartMode = 'Demand' }
 
 			## Set the start up mode using sc.exe. Note: we found that the ChangeStartMode method in the Win32_Service WMI class set services to 'Automatic (Delayed Start)' even when you specified 'Automatic' on Win7, Win8, and Win10.
-			$ChangeStartMode = & sc.exe config $Name start= $ScExeStartMode
+			$ChangeStartMode = & "$envWinDir\System32\sc.exe" config $Name start= $ScExeStartMode
 
 			If ($global:LastExitCode -ne 0) {
 				Throw "sc.exe failed with exit code [$($global:LastExitCode)] and message [$ChangeStartMode]."
@@ -10619,7 +10755,7 @@ Function Get-PendingReboot {
 		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -CmdletBoundParameters $PSBoundParameters -Header
 
 		## Initialize variables
-		[string]$private:ComputerName = ([Net.Dns]::GetHostEntry('')).HostName
+		[string]$private:ComputerName = $envComputerNameFQDN
 		$PendRebootErrorMsg = $null
 	}
 	Process {
@@ -10638,7 +10774,7 @@ Function Get-PendingReboot {
 		## Determine if a Windows Vista/Server 2008 and above machine has a pending reboot from a Component Based Servicing (CBS) operation
 		Try {
 			If (([version]$envOSVersion).Major -ge 5) {
-				If (Test-Path -LiteralPath 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending' -ErrorAction 'Stop') {
+				If (Test-Path -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending' -ErrorAction 'Stop') {
 					[nullable[boolean]]$IsCBServicingRebootPending = $true
 				}
 				Else {
@@ -10654,7 +10790,7 @@ Function Get-PendingReboot {
 
 		## Determine if there is a pending reboot from a Windows Update
 		Try {
-			If (Test-Path -LiteralPath 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ErrorAction 'Stop') {
+			If (Test-Path -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired' -ErrorAction 'Stop') {
 				[nullable[boolean]]$IsWindowsUpdateRebootPending = $true
 			}
 			Else {
@@ -10670,12 +10806,12 @@ Function Get-PendingReboot {
 		## Determine if there is a pending reboot from a pending file rename operation
 		[boolean]$IsFileRenameRebootPending = $false
 		$PendingFileRenameOperations = $null
-		If (Test-RegistryValue -Key 'HKLM:SYSTEM\CurrentControlSet\Control\Session Manager' -Value 'PendingFileRenameOperations') {
+		If (Test-RegistryValue -Key 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager' -Value 'PendingFileRenameOperations') {
 			#  If PendingFileRenameOperations value exists, set $IsFileRenameRebootPending variable to $true
 			[boolean]$IsFileRenameRebootPending = $true
 			#  Get the value of PendingFileRenameOperations
 			Try {
-				[string[]]$PendingFileRenameOperations = Get-ItemProperty -LiteralPath 'HKLM:SYSTEM\CurrentControlSet\Control\Session Manager' -ErrorAction 'Stop' | Select-Object -ExpandProperty 'PendingFileRenameOperations' -ErrorAction 'Stop'
+				[string[]]$PendingFileRenameOperations = Get-ItemProperty -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager' -ErrorAction 'Stop' | Select-Object -ExpandProperty 'PendingFileRenameOperations' -ErrorAction 'Stop'
 			}
 			Catch {
 				[string[]]$PendRebootErrorMsg += "Failed to get PendingFileRenameOperations: $($_.Exception.Message)"
@@ -10716,7 +10852,7 @@ Function Get-PendingReboot {
 
 		## Determine if there is a pending reboot from an App-V global Pending Task. (User profile based tasks will complete on logoff/logon)
 		Try {
-			If (Test-Path -LiteralPath 'HKLM:SOFTWARE\Software\Microsoft\AppV\Client\PendingTasks' -ErrorAction 'Stop') {
+			If (Test-Path -LiteralPath 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Software\Microsoft\AppV\Client\PendingTasks' -ErrorAction 'Stop') {
 
 				[nullable[boolean]]$IsAppVRebootPending = $true
 			}
@@ -10759,6 +10895,221 @@ Function Get-PendingReboot {
 }
 #endregion
 
+#region Function Set-ItemPermission
+Function Set-ItemPermission {
+    <#
+    .SYNOPSIS
+        Allow you to easily change permissions on files or folders
+    .PARAMETER Path
+        Path to the folder or file you want to modify (ex: C:\Temp)
+    .PARAMETER User
+        One or more user names (ex: BUILTIN\Users, DOMAIN\Admin) to give the permissions to. If you want to use SID, prefix it with an asterisk * (ex: *S-1-5-18)
+    .PARAMETER Permission
+		Permission or list of permissions to be set/added/removed/replaced. To see all the possible permissions go to 'http://technet.microsoft.com/fr-fr/library/ff730951.aspx'.
+		Permission DeleteSubdirectoriesAndFiles does not apply to files.
+    .PARAMETER PermissionType
+		Sets Access Control Type of the permissions. Allowed options: Allow, Deny   Default: Allow
+	.PARAMETER Inheritance
+		Sets permission inheritance. Does not apply to files. Multiple options can be specified. Allowed options: ObjectInherit, ContainerInherit, None  Default: None
+		None - The permission entry is not inherited by child objects, ObjectInherit - The permission entry is inherited by child leaf objects. ContainerInherit - The permission entry is inherited by child container objects.
+	.PARAMETER Propagation
+		Sets how to propagate inheritance. Does not apply to files. Allowed options: None, InheritOnly, NoPropagateInherit  Default: None
+		None - Specifies that no inheritance flags are set. NoPropagateInherit - Specifies that the permission entry is not propagated to child objects. InheritOnly - Specifies that the permission entry is propagated only to child objects. This includes both container and leaf child objects.
+	.PARAMETER Method
+		Specifies which method will be used to apply the permissions. Allowed options: Add, Set, Reset. 
+		Add - adds permissions rules but it does not remove previous permissions, Set - overwrites matching permission rules with new ones, Reset - removes matching permissions rules and then adds permission rules, Remove - Removes matching permission rules, RemoveSpecific - Removes specific permissions, RemoveAll - Removes all permission rules for specified user/s
+		Default: Add
+	.PARAMETER EnableInheritance
+		Enables inheritance on the files/folders. 
+    .EXAMPLE
+        Will grant FullControl permissions to 'John' and 'Users' on 'C:\Temp' and its files and folders children.
+        PS C:\>Set-ItemPermission -Path "C:\Temp" -User "DOMAIN\John", "BUILTIN\Utilisateurs" -Permission FullControl -Inheritance ObjectInherit,ContainerInherit
+    .EXAMPLE
+        Will grant Read permissions to 'John' on 'C:\Temp\pic.png'
+        PS C:\>Set-ItemPermission -Path "C:\Temp\pic.png" -User "DOMAIN\John" -Permission Read
+    .EXAMPLE
+        Will remove all permissions to 'John' on 'C:\Temp\Private'
+        PS C:\>Set-ItemPermission -Path "C:\Temp\Private" -User "DOMAIN\John" -Permission None -Method RemoveAll
+    .NOTES
+		Original Author : Julian DA CUNHA - dacunha.julian@gmail.com, used with permission
+	.LINK
+		http://psappdeploytoolkit.com
+    #>
+
+    [CmdletBinding()]
+    Param (
+		[Parameter( Mandatory=$True, Position=0, HelpMessage = "Path to the folder or file you want to modify (ex: C:\Temp)",ParameterSetName="DisableInheritance" )]
+		[Parameter( Mandatory=$True, Position=0, HelpMessage = "Path to the folder or file you want to modify (ex: C:\Temp)",ParameterSetName="EnableInheritance" )]
+		[ValidateNotNullOrEmpty()]
+        [Alias('File', 'Folder')]
+        [String]$Path,
+
+		[Parameter( Mandatory=$True, Position=1, HelpMessage = "One or more user names (ex: BUILTIN\Users, DOMAIN\Admin). If you want to use SID, prefix it with an asterisk * (ex: *S-1-5-18)", ParameterSetName="DisableInheritance")]
+        [Alias('Username', 'Users', 'SID', 'Usernames')]
+        [String[]]$User,
+
+        [Parameter( Mandatory=$True, Position=2, HelpMessage = "Permission or list of permissions to be set/added/removed/replaced. To see all the possible permissions go to 'http://technet.microsoft.com/fr-fr/library/ff730951.aspx'", ParameterSetName="DisableInheritance")]
+        [Alias('Acl', 'Grant', 'Permissions', 'Deny')]
+        [ValidateSet("AppendData", "ChangePermissions", "CreateDirectories", "CreateFiles", "Delete", `
+                     "DeleteSubdirectoriesAndFiles", "ExecuteFile", "FullControl", "ListDirectory", "Modify",`
+                     "Read", "ReadAndExecute", "ReadAttributes", "ReadData", "ReadExtendedAttributes", "ReadPermissions",`
+                     "Synchronize", "TakeOwnership", "Traverse", "Write", "WriteAttributes", "WriteData", "WriteExtendedAttributes", "None")]
+        [String[]]$Permission,
+
+        [Parameter( Mandatory=$False, Position=3, HelpMessage = "Whether you want to set Allow or Deny permissions", ParameterSetName="DisableInheritance")]
+		[Alias('AccessControlType')]
+        [ValidateSet("Allow", "Deny")]
+		[String]$PermissionType = "Allow",
+
+		[Parameter( Mandatory=$False, Position=4, HelpMessage = "Sets how permissions are inherited", ParameterSetName="DisableInheritance")]
+		[ValidateSet("ContainerInherit", "None", "ObjectInherit")]
+		[String[]]$Inheritance = "None",
+
+        [Parameter( Mandatory=$False, Position=5, HelpMessage = "Sets how to propage inheritance flags", ParameterSetName="DisableInheritance")]		
+        [ValidateSet("None", "InheritOnly", "NoPropagateInherit")]
+		[String]$Propagation = "None",
+
+		[Parameter( Mandatory=$False, Position=6, HelpMessage = "Specifies which method will be used to add/remove/replace permissions.", ParameterSetName="DisableInheritance")]
+		[ValidateSet("Add", "Set", "Reset", "Remove", "RemoveSpecific", "RemoveAll")]
+        [Alias("ApplyMethod", "ApplicationMethod")]
+		[String]$Method = "Add",
+
+		[Parameter( Mandatory=$True, Position=1, HelpMessage = "Enables inheritance, which removes explicit permissions.", ParameterSetName="EnableInheritance")]
+		[switch]$EnableInheritance
+	)
+
+	Begin {
+		## Get the name of this function and write header
+		[string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
+		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -CmdletBoundParameters $PSBoundParameters -Header
+	}
+
+    Process {
+        # Test elevated perms
+        If (-not $IsAdmin){
+            Write-Log -Message "Unable to use the function [Set-ItemPermission] without elevated permissions." -Source ${CmdletName}
+            Throw "Unable to use the function [Set-ItemPermission] without elevated permissions."
+		}
+
+		# Check path existence
+		If (-not (Test-Path -Path $Path -ErrorAction Stop)) {
+            Write-Log -Message "Specified path does not exist [$Path]." -Source ${CmdletName}
+            Throw "Specified path does not exist [$Path]."
+		}
+
+		If ($EnableInheritance) {
+			# Get object acls
+			$Acl = (get-item -Path $Path -ErrorAction Stop).GetAccessControl('Access')
+			# Enable inherance
+			$Acl.SetAccessRuleProtection($False, $True)
+			Write-Log -Message "Enabling Inheritance on path [$Path]." -Source ${CmdletName}
+			$null = Set-Acl -Path $Path -AclObject $Acl -ErrorAction Stop
+			return
+		}
+        # Permissions
+		[System.Security.AccessControl.FileSystemRights]$FileSystemRights = New-Object System.Security.AccessControl.FileSystemRights
+		If ($Permission -ne "None") {
+			foreach ($Entry in $Permission) {
+				$FileSystemRights = $FileSystemRights -bor [System.Security.AccessControl.FileSystemRights]$Entry
+			}
+		}
+
+        # InheritanceFlags
+		$InheritanceFlag = New-Object System.Security.AccessControl.InheritanceFlags
+		foreach ($IFlag in $Inheritance) {
+			$InheritanceFlag = $InheritanceFlag -bor [System.Security.AccessControl.InheritanceFlags]$IFlag
+		}
+
+        # PropagationFlags
+		$PropagationFlag = [System.Security.AccessControl.PropagationFlags]$Propagation
+
+        # Access Control Type
+		$Allow = [System.Security.AccessControl.AccessControlType]$PermissionType
+		
+		# Modify variables to remove file incompatible flags if this is a file
+		If (Test-Path -Path $Path -ErrorAction Stop -PathType Leaf) {
+			$FileSystemRights = $FileSystemRights -band (-bnot [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles)
+			$InheritanceFlag = [System.Security.AccessControl.InheritanceFlags]::None
+			$PropagationFlag = [System.Security.AccessControl.PropagationFlags]::None
+		}
+
+        # Get object acls
+        $Acl = (get-item -Path $Path -ErrorAction Stop).GetAccessControl('Access')
+        # Disable inherance, Preserve inherited permissions
+        $Acl.SetAccessRuleProtection($True, $True)
+		$null = Set-Acl -Path $Path -AclObject $Acl -ErrorAction Stop
+		# Get updated acls - without inheritance
+		$Acl = $null
+		$Acl = (get-item -Path $Path -ErrorAction Stop).GetAccessControl('Access')
+        # Apply permissions on Users
+        Foreach ($U in $User) {
+			# Trim whitespace and skip if empty
+			$U = $U.Trim()
+			If ($U.Length -eq 0) {
+				continue
+			}
+			# Set Username
+			If ($U.StartsWith('*')) {
+				# This is a SID, remove the *
+				$U = $U.remove(0,1)
+				try {
+					# Translate the SID
+					$Username = ConvertTo-NTAccountOrSID -SID $U
+				}
+				catch {
+					Write-Log "Failed to translate SID [$U]. Skipping..." -Source ${CmdletName} -Severity 2
+					continue
+				}
+
+				$Username = New-Object System.Security.Principal.NTAccount($UsersAccountName)
+			} else {
+				$Username = New-Object System.Security.Principal.NTAccount($U)				
+			}
+
+			# Set/Add/Remove/Replace permissions and log the changes
+			$Rule = New-Object System.Security.AccessControl.FileSystemAccessRule($Username, $FileSystemRights, $InheritanceFlag, $PropagationFlag, $Allow)
+			switch ($Method) {
+				"Add" {
+					Write-Log -Message "Setting permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.AddAccessRule($Rule)
+					break
+				}
+				"Set" {
+					Write-Log -Message "Setting permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.SetAccessRule($Rule)
+					break
+				}
+				"Reset" {
+					Write-Log -Message "Setting permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.ResetAccessRule($Rule)
+					break
+				}
+				"Remove" {
+					Write-Log -Message "Removing permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.RemoveAccessRule($Rule)
+					break
+				}
+				"RemoveSpecific" {
+					Write-Log -Message "Removing permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.RemoveAccessRuleSpecific($Rule)
+					break
+				}
+				"RemoveAll" {
+					Write-Log -Message "Removing permissions [Permissions:$FileSystemRights, InheritanceFlags:$InheritanceFlag, PropagationFlags:$PropagationFlag, AccessControlType:$Allow, Method:$Method] on path [$Path] for user [$Username]." -Source ${CmdletName}
+					$Acl.RemoveAccessRuleAll($Rule)
+					break
+				}
+			}
+		}
+		# Use the prepared ACL
+		$null = Set-Acl -Path $Path -AclObject $Acl -ErrorAction Stop
+	}
+	
+	End {
+		Write-FunctionHeaderOrFooter -CmdletName ${CmdletName} -Footer
+	}
+}
+#endregion
 
 #endregion
 ##*=============================================
@@ -10998,6 +11349,8 @@ If ($configConfigVersion -lt $appDeployMainScriptMinimumConfigVersion) {
 
 ## Log system/script information
 If ($appScriptVersion) { Write-Log -Message "[$installName] script version is [$appScriptVersion]" -Source $appDeployToolkitName }
+If ($appScriptDate) { Write-Log -Message "[$installName] script date is [$appScriptDate]" -Source $appDeployToolkitName }
+If ($appScriptAuthor) { Write-Log -Message "[$installName] script author is [$appScriptAuthor]" -Source $appDeployToolkitName }
 If ($deployAppScriptFriendlyName) { Write-Log -Message "[$deployAppScriptFriendlyName] script version is [$deployAppScriptVersion]" -Source $appDeployToolkitName }
 If ($deployAppScriptParameters) { Write-Log -Message "The following non-default parameters were passed to [$deployAppScriptFriendlyName]: [$deployAppScriptParameters]" -Source $appDeployToolkitName }
 If ($appDeployMainScriptFriendlyName) { Write-Log -Message "[$appDeployMainScriptFriendlyName] script version is [$appDeployMainScriptVersion]" -Source $appDeployToolkitName }

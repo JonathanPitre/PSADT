@@ -4,7 +4,7 @@
 	RootModule        = 'PSADT.psm1'
 
 	# Version number of this module.
-	ModuleVersion     = '3.8.2.1'
+	ModuleVersion     = '3.8.3'
 
 	# ID used to uniquely identify this module
 	GUID              = '41b2dd67-8447-4c66-b08a-f0bd0d5458b9'
@@ -58,7 +58,7 @@
   	# NestedModules = @()
 
 	# Functions to export from this module
-	FunctionsToExport = @('Convert-RegistryPath', ' Copy-File', 'Disable-TerminalServerInstallMode', 'Enable-TerminalServerInstallMode', 'Execute-MSI', 'Execute-MSP', 'Execute-Process', 'Execute-ProcessAsUser', 'Exit-Script', 'Get-FileVersion', 'Get-FreeDiskSpace', 'Get-HardwarePlatform', 'Get-IniValue', 'Get-InstalledApplication', 'Get-LoggedOnUser', 'Get-PendingReboot', 'Get-RegistryKey', 'Get-ScheduledTask', 'Get-ServiceStartMode', 'Get-UniversalDate', 'Get-UserProfiles', 'Get-WindowTitle', 'Install-MSUpdates', ' Install-SCCMSoftwareUpdates', 'Invoke-HKCURegistrySettingsForAllUsers', 'Invoke-RegisterOrUnregisterDLL', 'Invoke-SCCMTask', 'New-Folder', 'New-MsiTransform', 'New-Shortcut', 'Remove-File', 'Remove-Folder', 'Remove-InvalidFileNameChars', 'Remove-MSIApplications', 'Remove-RegistryKey', 'Resolve-Error', 'Send-Keys', 'Set-ActiveSetup', 'Set-IniValue', 'Set-PinnedApplication', 'Set-RegistryKey', 'Set-ServiceStartMode', 'Show-BalloonTip', 'Show-DialogBox', 'Show-InstallationProgress', 'Show-InstallationPrompt', 'Show-InstallationRestartPrompt', 'Show-InstallationWelcome', 'Start-ServiceAndDependencies', 'Stop-ServiceAndDependencies', 'Test-Battery', 'Test-MSUpdates', 'Test-NetworkConnection', 'Test-PowerPoint', 'Test-RegistryValue', 'Test-ServiceExists', 'Update-Desktop', 'Update-GroupPolicy', 'Update-SessionEnvironmentVariables', 'Write-Log', 'Show-HelpConsole')
+	FunctionsToExport = @('Convert-RegistryPath', ' Copy-File', 'Disable-TerminalServerInstallMode', 'Enable-TerminalServerInstallMode', 'Execute-MSI', 'Execute-MSP', 'Execute-Process', 'Execute-ProcessAsUser', 'Exit-Script', 'Get-FileVersion', 'Get-FreeDiskSpace', 'Get-HardwarePlatform', 'Get-IniValue', 'Get-InstalledApplication', 'Get-LoggedOnUser', 'Get-PendingReboot', 'Get-RegistryKey', 'Get-SchedulerTask', 'Get-ServiceStartMode', 'Get-UniversalDate', 'Get-UserProfiles', 'Get-WindowTitle', 'Install-MSUpdates', ' Install-SCCMSoftwareUpdates', 'Invoke-HKCURegistrySettingsForAllUsers', 'Invoke-RegisterOrUnregisterDLL', 'Invoke-SCCMTask', 'New-Folder', 'New-MsiTransform', 'New-Shortcut', 'Remove-File', 'Remove-Folder', 'Remove-InvalidFileNameChars', 'Remove-MSIApplications', 'Remove-RegistryKey', 'Resolve-Error', 'Send-Keys', 'Set-ActiveSetup', 'Set-IniValue', 'Set-ItemPermission', 'Set-PinnedApplication', 'Set-RegistryKey', 'Set-ServiceStartMode', 'Show-BalloonTip', 'Show-DialogBox', 'Show-InstallationProgress', 'Show-InstallationPrompt', 'Show-InstallationRestartPrompt', 'Show-InstallationWelcome', 'Start-ServiceAndDependencies', 'Stop-ServiceAndDependencies', 'Test-Battery', 'Test-MSUpdates', 'Test-NetworkConnection', 'Test-PowerPoint', 'Test-RegistryValue', 'Test-ServiceExists', 'Update-Desktop', 'Update-GroupPolicy', 'Update-SessionEnvironmentVariables', 'Write-Log', 'Show-HelpConsole')
 
 	# Cmdlets to export from this module
 	CmdletsToExport = @()
