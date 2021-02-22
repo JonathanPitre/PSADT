@@ -4,7 +4,7 @@
 	RootModule        = 'PSADT.psm1'
 
 	# Version number of this module.
-	ModuleVersion     = '3.8.3'
+	ModuleVersion     = '3.8.4'
 
 	# ID used to uniquely identify this module
 	GUID              = '41b2dd67-8447-4c66-b08a-f0bd0d5458b9'
@@ -16,7 +16,7 @@
 	CompanyName       = 'Dan Cunningham OBrien / Sean Lillis'
 
 	# Copyright statement for this module
-	Copyright         = 'c 2020 All rights reserved.'
+	Copyright         = 'c 2021 All rights reserved.'
 
 	# Description of the functionality provided by this module
 	Description       = 'PSADT is the unofficial powerShell module for PSAppDeployToolkit. The PowerShell App Deployment Toolkit provides a set of functions to perform common application deployment tasks and to interact with the user during a deployment. It simplifies the complex scripting challenges of deploying applications in the enterprise, provides a consistent deployment experience and improves installation success rates.'
@@ -58,7 +58,7 @@
   	# NestedModules = @()
 
 	# Functions to export from this module
-	FunctionsToExport = @('Convert-RegistryPath', ' Copy-File', 'Disable-TerminalServerInstallMode', 'Enable-TerminalServerInstallMode', 'Execute-MSI', 'Execute-MSP', 'Execute-Process', 'Execute-ProcessAsUser', 'Exit-Script', 'Get-FileVersion', 'Get-FreeDiskSpace', 'Get-HardwarePlatform', 'Get-IniValue', 'Get-InstalledApplication', 'Get-LoggedOnUser', 'Get-PendingReboot', 'Get-RegistryKey', 'Get-SchedulerTask', 'Get-ServiceStartMode', 'Get-UniversalDate', 'Get-UserProfiles', 'Get-WindowTitle', 'Install-MSUpdates', ' Install-SCCMSoftwareUpdates', 'Invoke-HKCURegistrySettingsForAllUsers', 'Invoke-RegisterOrUnregisterDLL', 'Invoke-SCCMTask', 'New-Folder', 'New-MsiTransform', 'New-Shortcut', 'Remove-File', 'Remove-Folder', 'Remove-InvalidFileNameChars', 'Remove-MSIApplications', 'Remove-RegistryKey', 'Resolve-Error', 'Send-Keys', 'Set-ActiveSetup', 'Set-IniValue', 'Set-ItemPermission', 'Set-PinnedApplication', 'Set-RegistryKey', 'Set-ServiceStartMode', 'Show-BalloonTip', 'Show-DialogBox', 'Show-InstallationProgress', 'Show-InstallationPrompt', 'Show-InstallationRestartPrompt', 'Show-InstallationWelcome', 'Start-ServiceAndDependencies', 'Stop-ServiceAndDependencies', 'Test-Battery', 'Test-MSUpdates', 'Test-NetworkConnection', 'Test-PowerPoint', 'Test-RegistryValue', 'Test-ServiceExists', 'Update-Desktop', 'Update-GroupPolicy', 'Update-SessionEnvironmentVariables', 'Write-Log', 'Show-HelpConsole')
+	FunctionsToExport = @('Convert-RegistryPath', ' Copy-File', 'Disable-TerminalServerInstallMode', 'Enable-TerminalServerInstallMode', 'Execute-MSI', 'Execute-MSP', 'Execute-Process', 'Execute-ProcessAsUser', 'Exit-Script', 'Get-FileVersion', 'Get-FreeDiskSpace', 'Get-HardwarePlatform', 'Get-IniValue', 'Get-InstalledApplication', 'Get-LoggedOnUser', 'Get-PendingReboot', 'Get-RegistryKey', 'Get-SchedulerTask', 'Get-ServiceStartMode', 'Get-Shortcut', 'Get-UniversalDate', 'Get-UserProfiles', 'Get-WindowTitle', 'Install-MSUpdates', ' Install-SCCMSoftwareUpdates', 'Invoke-HKCURegistrySettingsForAllUsers', 'Invoke-RegisterOrUnregisterDLL', 'Invoke-SCCMTask', 'New-Folder', 'New-MsiTransform', 'New-Shortcut', 'Remove-File', 'Remove-Folder', 'Remove-InvalidFileNameChars', 'Remove-MSIApplications', 'Remove-RegistryKey', 'Resolve-Error', 'Send-Keys', 'Set-ActiveSetup', 'Set-IniValue', 'Set-ItemPermission', 'Set-PinnedApplication', 'Set-RegistryKey', 'Set-ServiceStartMode', 'Set-Shortcut', 'Show-BalloonTip', 'Show-DialogBox', 'Show-InstallationProgress', 'Show-InstallationPrompt', 'Show-InstallationRestartPrompt', 'Show-InstallationWelcome', 'Start-ServiceAndDependencies', 'Stop-ServiceAndDependencies', 'Test-Battery', 'Test-MSUpdates', 'Test-NetworkConnection', 'Test-PowerPoint', 'Test-RegistryValue', 'Test-ServiceExists', 'Update-Desktop', 'Update-GroupPolicy', 'Update-SessionEnvironmentVariables', 'Write-Log', 'Show-HelpConsole')
 
 	# Cmdlets to export from this module
 	CmdletsToExport = @()
