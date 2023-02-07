@@ -4,7 +4,7 @@
 	RootModule        = 'PSADT.psm1'
 
 	# Version number of this module.
-	ModuleVersion     = '3.9.1'
+	ModuleVersion     = '3.9.2'
 
 	# ID used to uniquely identify this module
 	GUID              = '41b2dd67-8447-4c66-b08a-f0bd0d5458b9'
