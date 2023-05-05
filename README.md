@@ -110,7 +110,7 @@ Initialize-Module -Module "PSADT"
 
 You can use the cmdlet **Show-HelpConsole** or the alias **Get-PSADTHelp** to launch the [PowerShell App Deployment Toolkit](https://github.com/PSAppDeployToolkit/PSAppDeployToolkit) help console.
 
-All variables from **AppDeployToolMain.ps1** are available for use once a cmdlet is executed. They should cover all your needs to detect the system environment you're running your installation script from. Run the **Get-Variable** to see the full list.
+All variables from **AppDeployToolMain.ps1** are available for use once a cmdlet is executed. It should cover most of your needs to detect the system environment you're running your installation script from. Run **Get-Variable** to see the full list.
 
 ### Examples
 
