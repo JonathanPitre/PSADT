@@ -5,7 +5,7 @@ This is a fork of [PowerShell App Deployment Toolkit](https://github.com/PSAppDe
 In order for the [PowerShell App Deployment Toolkit](https://github.com/PSAppDeployToolkit/PSAppDeployToolkit) PowerShell module to load automatically when PowerShell is launched, you can copy the following code to the system [PowerShell profile](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7) file located in _**C:\Windows\System32\WindowsPowerShell\v1.0\profile.ps1**_.
 
 ```powershell
-# Standalone application install script for VDI environment - (C)2022 Jonathan Pitre, inspired by xenappblog.com
+# Standalone application install script - (C)2023 Jonathan Pitre
 
 #Requires -Version 5.1
 #Requires -RunAsAdministrator
@@ -21,6 +21,12 @@ Try { Set-ExecutionPolicy -ExecutionPolicy 'ByPass' -Scope 'Process' -Force } Ca
 
 Function Initialize-Module
 {
+    <#
+    .SYNOPSIS
+        Initialize-Module install and import modules from PowerShell Galllery.
+    .OUTPUTS
+        System.String
+    #>
     [CmdletBinding()]
     Param
     (
@@ -37,8 +43,9 @@ Function Initialize-Module
     Else
     {
         # If module is not imported, but available on disk then import
-        If ( [boolean](Get-Module -ListAvailable | Where-Object { $_.Name -eq $Module }) )
-        {   
+        If ( [bool](Get-Module -ListAvailable | Where-Object { $_.Name -eq $Module }) )
+
+        {
             $InstalledModuleVersion = (Get-InstalledModule -Name $Module).Version
             $ModuleVersion = (Find-Module -Name $Module).Version
             $ModulePath = (Get-InstalledModule -Name $Module).InstalledLocation
@@ -89,12 +96,13 @@ Function Initialize-Module
             {
                 # If the module is not imported, not available and not in the online gallery then abort
                 Write-Host -Object "Module $Module was not imported, not available and not in an online gallery, exiting." -ForegroundColor Red
-                EXIT 1
+                Exit 1
             }
         }
     }
 }
 
+# Install and import module
 Initialize-Module -Module "PSADT"
 ````
 
